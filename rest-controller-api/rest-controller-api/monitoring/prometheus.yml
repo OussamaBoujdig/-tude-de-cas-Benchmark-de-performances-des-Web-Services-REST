@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Variant A - Jersey
+  - job_name: 'variant-a-jersey'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['variant-a-jersey:8081']
+        labels:
+          variant: 'jersey'
+          application: 'variant-a-jersey'
+
+  # Variant C - Spring RestController
+  - job_name: 'variant-c-spring'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['variant-c-spring:8082']
+        labels:
+          variant: 'spring-restcontroller'
+          application: 'variant-c-spring'
+
+  # Variant D - Spring Data REST
+  - job_name: 'variant-d-spring-data'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['variant-d-spring-data:8083']
+        labels:
+          variant: 'spring-data-rest'
+          application: 'variant-d-spring-data'

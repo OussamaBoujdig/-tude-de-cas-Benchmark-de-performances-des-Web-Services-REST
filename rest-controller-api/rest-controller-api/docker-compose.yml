@@ -1,0 +1,156 @@
+
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: rest-api-postgres
+    environment:
+      POSTGRES_DB: rest_api_perf
+      POSTGRES_USER: perfuser
+      POSTGRES_PASSWORD: perfpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/generate-data.sql:/docker-entrypoint-initdb.d/02-data.sql
+    networks:
+      - perf-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U perfuser -d rest_api_perf"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  # Variant A: Jersey (JAX-RS)
+  variant-a-jersey:
+    build:
+      context: .
+      dockerfile: variant-a-jersey/Dockerfile
+    container_name: variant-a-jersey
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/rest_api_perf
+      SPRING_DATASOURCE_USERNAME: perfuser
+      SPRING_DATASOURCE_PASSWORD: perfpass
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - perf-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - jersey
+      - all
+
+  # Variant C: Spring @RestController
+  variant-c-spring:
+    build:
+      context: .
+      dockerfile: variant-c-spring/Dockerfile
+    container_name: variant-c-spring
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/rest_api_perf
+      SPRING_DATASOURCE_USERNAME: perfuser
+      SPRING_DATASOURCE_PASSWORD: perfpass
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - perf-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - spring
+      - all
+
+  # Variant D: Spring Data REST
+  variant-d-spring-data:
+    build:
+      context: .
+      dockerfile: variant-d-spring-data/Dockerfile
+    container_name: variant-d-spring-data
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/rest_api_perf
+      SPRING_DATASOURCE_USERNAME: perfuser
+      SPRING_DATASOURCE_PASSWORD: perfpass
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - perf-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - springdata
+      - all
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - perf-network
+    profiles:
+      - monitoring
+      - all
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    networks:
+      - perf-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+      - all
+
+volumes:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  perf-network:
+    driver: bridge
